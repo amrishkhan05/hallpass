@@ -1,0 +1,30 @@
+{
+  "name": "@amrishkhan05/hallpass",
+  "version": "0.1.0",
+  "description": "Runtime policy enforcement for AI coding agents.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "hallpass": "./dist/cli/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amrishkhan05/hallpass.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amrishkhan05/hallpass/issues"
+  },
+  "homepage": "https://github.com/amrishkhan05/hallpass#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}
