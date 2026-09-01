@@ -1,4 +1,4 @@
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.4";
 export const EXIT = { PASS: 0, VIOLATION: 1, CONFIG: 2, INTERNAL: 3, APPROVAL: 4, CONFLICT: 5 } as const;
 
 export type Classification = "deterministic" | "structural" | "heuristic" | "semantic" | "advisory";
