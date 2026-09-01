@@ -1,11 +1,11 @@
 {
   "name": "@amrishkhan05/hallpass",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "Runtime policy enforcement for AI coding agents.",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "hallpass": "dist/cli/index.js"
+    "hallpass": "./dist/cli/index.js"
   },
   "exports": {
     ".": {

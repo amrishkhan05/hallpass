@@ -151,14 +151,12 @@ npm run check
 npm pack
 ```
 
-When you push a GitHub Release named `v<package.json version>`, the workflow publishes the same version to **npm** *and* **GitHub Packages**. You’ll need npm Trusted Publishing set up for `amrishkhan05/hallpass` and the `publish.yml` workflow. `NPM_TOKEN` is just a fallback, not the default.
+When `package.json` contains a version missing from either registry, a push to `main` publishes it to **npm** and **GitHub Packages**. You’ll need npm Trusted Publishing set up for `amrishkhan05/hallpass` and the `publish.yml` workflow. `NPM_TOKEN` is just a fallback, not the default.
 
-First release steps:
+Release steps:
 ```bash
-git tag v0.1.0
+npm version patch
 git push origin main
-git push origin v0.1.0
-# Then create a GitHub Release v0.1.0
 ```
 
 If Trusted Publishing isn’t available, fall back to:
@@ -316,15 +314,13 @@ npm run check
 npm pack
 ```
 
-The release workflow publishes the same package version to npm and GitHub Packages when a GitHub Release named `v<package.json version>` is published. npm Trusted Publishing must first be configured on npmjs.com for repository `amrishkhan05/hallpass` and workflow `publish.yml`. `NPM_TOKEN` is a documented fallback, not the default.
+The publish workflow sends a version missing from either registry to npm and GitHub Packages on pushes to `main`. npm Trusted Publishing must first be configured on npmjs.com for repository `amrishkhan05/hallpass` and workflow `publish.yml`. `NPM_TOKEN` is a documented fallback, not the default.
 
-First release:
+Release:
 
 ```bash
-git tag v0.1.0
+npm version patch
 git push origin main
-git push origin v0.1.0
-# Publish GitHub Release v0.1.0
 ```
 
 If Trusted Publishing is unavailable, set `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` only on the npm publish step and run `npm publish --access public --provenance`; retain `id-token: write`. Do not configure one permanent registry in `package.json`, because the workflow publishes separately to npm and GitHub Packages.
