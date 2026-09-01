@@ -1,0 +1,7 @@
+# @format
+
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussions
+    url: https://github.com/amrishkhan05/hallpass/discussions
+    about: Ask questions, share ideas, and discuss Hallpass usage with the community.
