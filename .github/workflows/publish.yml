@@ -1,10 +1,8 @@
-name: Build and Publish Packages
+name: Release Packages
 
 on:
-  push:
-    branches:
-      - main
-
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -38,16 +36,20 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check npm version
+      - name: Validate package version matches release tag
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if npm view "@amrishkhan05/hallpass@$VERSION" version >/dev/null 2>&1; then
-            echo "Version $VERSION already exists on npm."
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${{ github.event.release.tag_name || github.ref_name }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "package.json version ($PACKAGE_VERSION) does not match release tag ($TAG_VERSION)"
             exit 1
           fi
 
       - name: Publish to npmjs
-        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
 
       - name: Set up Node for GitHub Packages
         uses: actions/setup-node@v4
@@ -57,6 +59,6 @@ jobs:
           scope: '@amrishkhan05'
 
       - name: Publish to GitHub Packages
-        run: npm publish --registry=https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm publish --registry=https://npm.pkg.github.com

@@ -11,6 +11,8 @@ const project = new URL("..", import.meta.url).pathname;
 const temporary = await mkdtemp(join(tmpdir(), "hallpass-package-"));
 const installRoot = join(temporary, "install");
 const repository = join(temporary, "repository");
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const expectedVersion = packageJson.version;
 const run = (command, args, cwd = project) => execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 try {
@@ -18,7 +20,7 @@ try {
   const archive = join(temporary, basename(archiveName));
   run("npm", ["install", "--global", "--prefix", installRoot, archive]);
   const hallpass = process.platform === "win32" ? join(installRoot, "hallpass.cmd") : join(installRoot, "bin", "hallpass");
-  assert.equal(run(hallpass, ["--version"]).trim(), "0.1.0");
+  assert.equal(run(hallpass, ["--version"]).trim(), expectedVersion);
   assert.match(run(hallpass, ["--help"]), /Runtime policy enforcement/);
 
   await mkdir(join(repository, "src"), { recursive: true });
