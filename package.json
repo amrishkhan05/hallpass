@@ -1,13 +1,31 @@
 {
   "name": "@amrishkhan05/hallpass",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Runtime policy enforcement for AI coding agents.",
   "type": "module",
   "license": "MIT",
-  "bin": { "hallpass": "./dist/cli/index.js" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "files": ["dist", "README.md", "LICENSE", "SECURITY.md", "CONTRIBUTING.md", "CHANGELOG.md", "hallpass.config.example.yml", "assets"],
-  "engines": { "node": ">=20.19" },
+  "bin": {
+    "hallpass": "dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "hallpass.config.example.yml",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.json && node scripts/make-executable.mjs",
@@ -20,7 +38,10 @@
     "validate:package": "node scripts/validate-package.mjs",
     "prepublishOnly": "npm run check"
   },
-  "dependencies": { "commander": "^14.0.0", "yaml": "^2.9.0" },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "yaml": "^2.9.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.3.0",
@@ -28,9 +49,29 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.69.0"
   },
-  "repository": { "type": "git", "url": "git+https://github.com/amrishkhan05/hallpass.git" },
-  "bugs": { "url": "https://github.com/amrishkhan05/hallpass/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amrishkhan05/hallpass.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amrishkhan05/hallpass/issues"
+  },
   "homepage": "https://github.com/amrishkhan05/hallpass#readme",
-  "keywords": ["ai", "coding-agent", "agents-md", "claude-code", "codex", "cursor", "copilot", "policy", "guardrails", "developer-tools", "cli", "architecture"],
-  "publishConfig": { "access": "public" }
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "agents-md",
+    "claude-code",
+    "codex",
+    "cursor",
+    "copilot",
+    "policy",
+    "guardrails",
+    "developer-tools",
+    "cli",
+    "architecture"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

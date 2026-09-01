@@ -38,13 +38,16 @@ jobs:
       - name: Build
         run: npm run build
 
-- name: Set up npm for Trusted Publishing
-  run: |
-    npm config set //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-    npm config set provenance true
+      - name: Check npm version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@amrishkhan05/hallpass@$VERSION" version >/dev/null 2>&1; then
+            echo "Version $VERSION already exists on npm."
+            exit 1
+          fi
 
-- name: Publish to npmjs
-  run: npm publish --provenance
+      - name: Publish to npmjs
+        run: npm publish --provenance
 
       - name: Set up Node for GitHub Packages
         uses: actions/setup-node@v4
