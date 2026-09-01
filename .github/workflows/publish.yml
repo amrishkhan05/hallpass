@@ -1,0 +1,69 @@
+name: Publish
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm pack --dry-run
+      - name: Validate release version
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${{ github.event.release.tag_name }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          test "$PACKAGE_VERSION" = "$TAG_VERSION" || {
+            echo "package.json version ($PACKAGE_VERSION) does not match release tag ($TAG_VERSION)"
+            exit 1
+          }
+  publish-npm:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - name: Reject duplicate version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "@amrishkhan05/hallpass@$VERSION" version >/dev/null 2>&1; then
+            echo "@amrishkhan05/hallpass@$VERSION already exists on npm"
+            exit 1
+          fi
+      - run: npm publish --access public
+  publish-github:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: "@amrishkhan05"
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

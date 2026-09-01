@@ -1,0 +1,37 @@
+version: 1
+persona: { enabled: true, intensity: 2 }
+conflicts: { behavior: block }
+overrides: { enabled: true, requireReason: true }
+governance:
+  protect: [hallpass.config.yml, .hallpass.yml, .hallpass/**, AGENTS.md, CLAUDE.md, .claude/hooks/**, .claude/settings.json, .cursor/hooks.json, .github/workflows/**]
+rules:
+  - id: DEP-001
+    title: New dependencies require approval
+    classification: deterministic
+    enforcement: require-approval
+    detector: { type: dependency-change, action: add }
+  - id: ARCH-001
+    title: Controllers cannot import Prisma
+    classification: structural
+    enforcement: block
+    scope: { include: [src/**/*.controller.ts] }
+    detector: { type: forbidden-import, imports: ["@prisma/client"] }
+  - id: TYPE-001
+    title: Explicit TypeScript any is not allowed
+    classification: deterministic
+    enforcement: block
+    scope: { include: ["**/*.ts"] }
+    detector: { type: typescript-any }
+  - id: TEST-001
+    title: Tests must pass when source changes
+    classification: deterministic
+    enforcement: block
+    detector:
+      type: required-command
+      when: { changed: [src/**] }
+      command: npm test
+  - id: SHELL-001
+    title: Destructive Git commands require approval
+    classification: deterministic
+    enforcement: require-approval
+    detector: { type: shell-command, commands: [git reset --hard, git clean -fd] }

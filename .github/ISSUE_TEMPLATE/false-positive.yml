@@ -1,0 +1,26 @@
+name: False positive
+description: Report an incorrect Hallpass finding
+body:
+  - type: input
+    id: version
+    attributes: { label: Hallpass version }
+    validations: { required: true }
+  - type: textarea
+    id: rule
+    attributes: { label: Rule and classification }
+    validations: { required: true }
+  - type: textarea
+    id: pattern
+    attributes: { label: Repository pattern }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected result }
+    validations: { required: true }
+  - type: textarea
+    id: actual
+    attributes: { label: Actual result }
+    validations: { required: true }
+  - type: textarea
+    id: reproduction
+    attributes: { label: Minimal reproduction }
+    validations: { required: true }

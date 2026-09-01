@@ -2,29 +2,35 @@
   "name": "@amrishkhan05/hallpass",
   "version": "0.1.0",
   "description": "Runtime policy enforcement for AI coding agents.",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "type": "module",
-  "bin": {
-    "hallpass": "./dist/cli/index.js"
+  "license": "MIT",
+  "bin": { "hallpass": "./dist/cli/index.js" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE", "SECURITY.md", "CONTRIBUTING.md", "CHANGELOG.md", "hallpass.config.example.yml"],
+  "engines": { "node": ">=20.19" },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/make-executable.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "npm run build && node --test tests/*.test.js",
+    "test:coverage": "npm run build && node --test --experimental-test-coverage tests/*.test.js",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "pack:check": "npm pack --dry-run",
+    "validate:package": "node scripts/validate-package.mjs",
+    "prepublishOnly": "npm run check"
   },
-  "engines": {
-    "node": ">=20"
+  "dependencies": { "commander": "^14.0.0", "yaml": "^2.9.0" },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.3.0",
+    "eslint": "^10.9.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.69.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/amrishkhan05/hallpass.git"
-  },
-  "bugs": {
-    "url": "https://github.com/amrishkhan05/hallpass/issues"
-  },
+  "repository": { "type": "git", "url": "git+https://github.com/amrishkhan05/hallpass.git" },
+  "bugs": { "url": "https://github.com/amrishkhan05/hallpass/issues" },
   "homepage": "https://github.com/amrishkhan05/hallpass#readme",
-  "publishConfig": {
-    "access": "public"
-  }
+  "keywords": ["ai", "coding-agent", "agents-md", "claude-code", "codex", "cursor", "copilot", "policy", "guardrails", "developer-tools", "cli", "architecture"],
+  "publishConfig": { "access": "public" }
 }
