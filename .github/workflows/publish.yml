@@ -32,8 +32,6 @@ jobs:
 
       - name: Check npmjs
         id: npmjs
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PACKAGE=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
@@ -41,8 +39,6 @@ jobs:
 
       - name: Publish to npmjs
         if: steps.npmjs.outputs.exists == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
 
       - name: Set up Node for GitHub Packages

@@ -151,19 +151,13 @@ npm run check
 npm pack
 ```
 
-When `package.json` contains a version missing from either registry, a push to `main` publishes it to **npm** and **GitHub Packages**. You’ll need npm Trusted Publishing set up for `amrishkhan05/hallpass` and the `publish.yml` workflow. `NPM_TOKEN` is just a fallback, not the default.
+When `package.json` contains a version missing from either registry, a push to `main` publishes it to **npm** and **GitHub Packages**. npm uses Trusted Publishing for repository `amrishkhan05/hallpass` and workflow `publish.yml`; GitHub Packages uses the workflow's `GITHUB_TOKEN`.
 
 Release steps:
 ```bash
 npm version patch
 git push origin main
 ```
-
-If Trusted Publishing isn’t available, fall back to:
-```bash
-npm publish --access public --provenance
-```
-Make sure the `NODE_AUTH_TOKEN` secret is only used on the publish step and keep `id-token: write`.
 
 ---
 
@@ -314,7 +308,7 @@ npm run check
 npm pack
 ```
 
-The publish workflow sends a version missing from either registry to npm and GitHub Packages on pushes to `main`. npm Trusted Publishing must first be configured on npmjs.com for repository `amrishkhan05/hallpass` and workflow `publish.yml`. `NPM_TOKEN` is a documented fallback, not the default.
+The publish workflow sends a version missing from either registry to npm and GitHub Packages on pushes to `main`. npm Trusted Publishing must first be configured on npmjs.com for repository `amrishkhan05/hallpass` and workflow `publish.yml`; GitHub Packages uses the workflow's `GITHUB_TOKEN`.
 
 Release:
 
@@ -322,8 +316,6 @@ Release:
 npm version patch
 git push origin main
 ```
-
-If Trusted Publishing is unavailable, set `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` only on the npm publish step and run `npm publish --access public --provenance`; retain `id-token: write`. Do not configure one permanent registry in `package.json`, because the workflow publishes separately to npm and GitHub Packages.
 
 See [SECURITY.md](SECURITY.md) for the trust model and [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.
 
