@@ -1,6 +1,6 @@
 {
   "name": "@amrishkhan05/hallpass",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Runtime policy enforcement for AI coding agents.",
   "type": "module",
   "license": "MIT",
