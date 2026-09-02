@@ -210,8 +210,17 @@ program.command("finish").description("Run the authoritative completion gate").o
   if (current.conflicts.length) addGateFinding("POLICY-CONFLICT", "Unresolved instruction conflicts prevent completion.", current.conflicts);
   report.violations.unshift(...gateFindings);
   if (gateFindings.length) report.status = "fail";
-  await recordAudit(rootPath, report, "completion-gate");
-  print(options.json ? report : renderReport(report, config), Boolean(options.json));
+  const gateResult = {
+    schemaVersion: 1,
+    decision: report.status === "pass" ? "pass" : "fail",
+    policy: { fresh: saved?.sourceFingerprint === current.fingerprint, conflicts: current.conflicts.length },
+    governance: { valid: !report.violations.some((item) => item.ruleId === "GOV-001") },
+    diff: { status: report.status },
+    violations: report.violations.map((item) => ({ ruleId: item.ruleId, message: item.message, classification: item.classification, location: item.location })),
+    version: VERSION,
+  };
+  await recordAudit(rootPath, report, "completion.gate");
+  print(options.json ? gateResult : renderReport(report, config), Boolean(options.json));
   if (current.conflicts.length) process.exitCode = EXIT.CONFLICT;
   else if (gateFindings.some((item) => item.ruleId === "POLICY-STALE")) process.exitCode = EXIT.CONFIG;
   else if (report.violations.some((item) => item.decision === "require-approval")) process.exitCode = EXIT.APPROVAL;
@@ -251,13 +260,13 @@ program.command("doctor").description("Diagnose repository policy health").optio
   else if (checks.conflicts) process.exitCode = EXIT.CONFLICT;
 });
 
-program.command("allow").description("Record a human policy approval").argument("<ruleId>").requiredOption("--reason <reason>").option("--scope <path>").option("--expires <iso-date>").action(async (ruleId, options) => {
+program.command("allow").description("Record a human policy approval").argument("<ruleId>").requiredOption("--reason <reason>").option("--scope <path>").option("--expires <iso-date>").option("--once", "single-use approval consumed on first match").action(async (ruleId, options) => {
   const rootPath = await root(); const { config } = await loadConfig(rootPath);
   if (!config.overrides.enabled) throw new ConfigurationError("Approvals are disabled.");
   if (!config.rules.some((item) => item.id === ruleId) && ruleId !== "GOV-001") throw new ConfigurationError(`Unknown rule: ${ruleId}`);
   if (options.expires && Number.isNaN(Date.parse(options.expires))) throw new ConfigurationError("--expires must be an ISO date.");
-  await addApproval(rootPath, { rule: ruleId, reason: options.reason, timestamp: new Date().toISOString(), ...(options.scope ? { scope: options.scope } : {}), ...(options.expires ? { expires: options.expires } : {}) });
-  print(`Approval recorded for ${ruleId}.`);
+  await addApproval(rootPath, { rule: ruleId, reason: options.reason, timestamp: new Date().toISOString(), mode: options.once ? "single-use" : "permanent", ...(options.scope ? { scope: options.scope } : {}), ...(options.expires ? { expires: options.expires } : {}) });
+  print(`Approval recorded for ${ruleId}${options.once ? " (single-use)" : ""}.`);
 });
 
 program.command("guard").description("Evaluate a sensitive action before execution").argument("<action>", "shell, write, delete, or dependency").option("--command <command>").option("--file <path>").option("--add <package>").option("--remove <package>").option("--json", "emit JSON").action(async (action, options) => {
@@ -366,7 +375,7 @@ program.command("hook").description("Evaluate a normalized agent hook payload").
   const input = options.payload ?? await readStdin();
   const payload = parse(input || "{}") as Record<string, unknown>;
   const event = normalizeEvent(adapter, payload, rootPath);
-  const findings = event.type === "shell.action" ? evaluateShell(event as ShellActionEvent, config.rules.map((rule) => applyProfile(rule, config.profile))) : [];
+  const findings = event.type === "shell.execute" ? evaluateShell(event as ShellActionEvent, config.rules.map((rule) => applyProfile(rule, config.profile))) : [];
   print(adapterResponse(adapter, findings), true);
 });
 

@@ -13,7 +13,7 @@ import { saveBaseline } from "../dist/baseline.js";
 import { addApproval } from "../dist/approvals.js";
 import { gitChanges } from "../dist/git.js";
 import { selectComment } from "../dist/persona.js";
-import { adapterResponse, evaluateShell, normalizeEvent } from "../dist/adapters.js";
+import { adapterResponse, evaluateShell, normalizeEvent, validateAdapterHookIntegration } from "../dist/adapters.js";
 
 const baseConfig = {
   version: 1,
@@ -165,12 +165,26 @@ test("required imports are checked and existing findings can be baselined", asyn
   const root = await repository();
   try {
     await writeFile(join(root, "src", "clean.ts"), "export const clean = false;\n");
-    const config = validateConfig({ ...baseConfig, rules: [{ id: "IMPORT-001", title: "Use the shared logger", classification: "structural", enforcement: "block", scope: { include: ["src/**"] }, detector: { type: "required-import", imports: ["@app/logger"] } }] });
+    const config = validateConfig({
+      ...baseConfig,
+      rules: [
+        {
+          id: "IMPORT-001",
+          title: "Use the shared logger",
+          classification: "structural",
+          enforcement: "block",
+          scope: { include: ["src/**"] },
+          detector: { type: "required-import", imports: ["@app/logger"] },
+        },
+      ],
+    });
     const report = await evaluate(root, config);
     assert.equal(report.violations[0].ruleId, "IMPORT-001");
     await saveBaseline(root, [report.violations[0].fingerprint]);
     assert.ok(!(await evaluate(root, config)).violations.some((item) => item.ruleId === "IMPORT-001"));
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("conflicting compiled policies are blocked before approval", async () => {
@@ -209,8 +223,8 @@ test("semantic and heuristic guidance compiles as advisory warnings without beco
 test("codex and copilot adapters expose full lifecycle normalization and responses", () => {
   const codex = normalizeEvent("codex", { command: "git status --short" }, "/repo");
   const copilot = normalizeEvent("copilot", { command: "npm test" }, "/repo");
-  assert.equal(codex.type, "shell.action");
-  assert.equal(copilot.type, "shell.action");
+  assert.equal(codex.type, "shell.execute");
+  assert.equal(copilot.type, "shell.execute");
   assert.equal(adapterResponse("codex", []).decision, "allow");
   assert.equal(adapterResponse("copilot", []).decision, "allow");
   assert.equal(
@@ -229,4 +243,71 @@ test("shell adapters normalize payloads without coupling policy to an agent", ()
   assert.equal(adapterResponse("claude", findings).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(evaluateShell(normalizeEvent("claude", { command: "hallpass allow DEP-001 --reason self" }, "/repo"), [])[0].ruleId, "GOV-APPROVAL");
   assert.equal(evaluateShell(normalizeEvent("claude", { command: "git reset --hard" }, "/repo"), [])[0].ruleId, "GOV-GIT");
+});
+
+test("action model normalizes git commands with subcommand and ref extraction", () => {
+  const gitCommit = normalizeEvent("claude", { command: "git commit -m 'test'" }, "/repo");
+  const gitPush = normalizeEvent("claude", { command: "git push origin main" }, "/repo");
+  const gitForcePush = normalizeEvent("claude", { command: "git push --force origin main" }, "/repo");
+
+  assert.equal(gitCommit.action?.category, "git.commit");
+  assert.equal(gitPush.action?.category, "git.push");
+  assert.equal(gitPush.action?.target, "origin");
+  assert.equal(gitForcePush.action?.category, "git.push");
+  assert.equal(gitForcePush.metadata?.gitSubcommand, "push");
+});
+
+test("action model normalizes package manager commands with package detection", () => {
+  const npmAdd = normalizeEvent("claude", { command: "npm install lodash" }, "/repo");
+  const yarnAdd = normalizeEvent("claude", { command: "yarn add express" }, "/repo");
+  const pnpmRemove = normalizeEvent("claude", { command: "pnpm remove typescript" }, "/repo");
+
+  assert.equal(npmAdd.action?.category, "dependency.add");
+  assert.equal(npmAdd.action?.target, "lodash");
+  assert.equal(npmAdd.metadata?.packageManager, "npm");
+  assert.equal(yarnAdd.action?.target, "express");
+  assert.equal(pnpmRemove.action?.category, "dependency.remove");
+  assert.equal(pnpmRemove.action?.target, "typescript");
+});
+
+test("action model tags config file modifications appropriately", () => {
+  const pkgJson = normalizeEvent("claude", { tool_name: "Write", file_path: "package.json", content: "{}" }, "/repo");
+  const agentsFile = normalizeEvent("claude", { tool_name: "Write", file_path: "AGENTS.md", content: "Never..." }, "/repo");
+  const workflow = normalizeEvent("claude", { tool_name: "Write", file_path: ".github/workflows/ci.yml", content: "..." }, "/repo");
+
+  assert.equal(pkgJson.action?.category, "config.modify");
+  assert.equal(pkgJson.action?.target, "package.json");
+  assert.equal(agentsFile.action?.category, "config.modify");
+  assert.equal(workflow.action?.category, "config.modify");
+  assert.equal(workflow.action?.target, ".github/workflows/ci.yml");
+});
+
+test("adapter hook integration validates capability coverage", () => {
+  const claude = validateAdapterHookIntegration("claude");
+  const cursor = validateAdapterHookIntegration("cursor");
+  const copilot = validateAdapterHookIntegration("copilot");
+
+  assert.ok(claude.coverage["shell.execute"]);
+  assert.ok(claude.coverage["file.write"]);
+  assert.equal(claude.coverage["workflow.modify"], false);
+
+  assert.ok(cursor.coverage["dependency.add"]);
+  assert.equal(cursor.coverage["git.push"], "partial");
+
+  assert.equal(copilot.coverage["shell.execute"], "partial");
+  assert.equal(copilot.coverage["git.commit"], false);
+});
+
+test("adapter response formatting is adapter-specific", () => {
+  const findings = [{ id: "P1", ruleId: "RULE-001", decision: "block", classification: "deterministic", message: "blocked", category: "test", fingerprint: "x" }];
+
+  const claudeResp = adapterResponse("claude", findings);
+  assert.ok(claudeResp.hookSpecificOutput);
+  assert.equal(claudeResp.hookSpecificOutput.permissionDecision, "deny");
+
+  const cursorResp = adapterResponse("cursor", findings);
+  assert.equal(cursorResp.permission, "deny");
+
+  const copilotResp = adapterResponse("copilot", findings);
+  assert.equal(copilotResp.decision, "block");
 });

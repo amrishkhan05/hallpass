@@ -1,8 +1,11 @@
 import type { DetectorType } from "../core/types.js";
 import { detectRequiredCommand } from "./completion.js";
+import { configModificationDetector } from "./config.js";
 import { detectDependencies } from "./dependencies.js";
 import { detectDeletedTests, detectMaxFiles, detectMaxLoc, detectPaths } from "./files.js";
+import { gitOperationDetector } from "./git.js";
 import { detectImports, detectRequiredImports, detectTypeScript } from "./source.js";
+import { workflowModificationDetector } from "./workflow.js";
 import type { Detector } from "./types.js";
 
 export const detectors: Partial<Record<DetectorType, Detector>> = {
@@ -21,6 +24,9 @@ export const detectors: Partial<Record<DetectorType, Detector>> = {
   "dependency-change": detectDependencies,
   "forbidden-dependency": detectDependencies,
   "required-command": detectRequiredCommand,
+  "git-operation": gitOperationDetector,
+  "config-modification": configModificationDetector,
+  "workflow-modification": workflowModificationDetector,
 };
 
 export type { Detection, DetectorContext } from "./types.js";

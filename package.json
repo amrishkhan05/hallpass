@@ -39,7 +39,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.json && node scripts/make-executable.mjs",
+    "build": "npm run clean && node scripts/generate-version.mjs && tsc -p tsconfig.json && node scripts/make-executable.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "npm run build && node --test tests/*.test.js",

@@ -10,11 +10,27 @@ import process from "node:process";
 import { URL } from "node:url";
 
 const cli = new URL("../dist/cli/index.js", import.meta.url).pathname;
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const expectedVersion = packageJson.version;
 const missing = (path) => access(path).then(() => false, (error) => error.code === "ENOENT");
 
 test("built CLI exposes version and help", () => {
-  assert.equal(execFileSync(process.execPath, [cli, "--version"], { encoding: "utf8" }).trim(), "0.1.4");
+  assert.equal(execFileSync(process.execPath, [cli, "--version"], { encoding: "utf8" }).trim(), expectedVersion);
   assert.match(execFileSync(process.execPath, [cli, "--help"], { encoding: "utf8" }), /Runtime policy enforcement/);
+});
+
+test("version consistency: package.json, CLI, and compiled metadata agree", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hallpass-cli-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    spawnSync(process.execPath, [cli, "init", "--json"], { cwd: root, encoding: "utf8" });
+    const cliVersion = execFileSync(process.execPath, [cli, "--version"], { cwd: root, encoding: "utf8" }).trim();
+    const compiled = JSON.parse(await readFile(join(root, ".hallpass", "compiled.json"), "utf8"));
+    assert.equal(cliVersion, expectedVersion, "CLI version must match package.json");
+    assert.equal(compiled.compilerVersion, expectedVersion, "compiled metadata version must match package.json");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("init creates human-owned config and generated state", async () => {
@@ -25,7 +41,7 @@ test("init creates human-owned config and generated state", async () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).config, "hallpass.config.yml");
     assert.match(await readFile(join(root, ".gitignore"), "utf8"), /\.hallpass\//);
-    assert.equal(JSON.parse(await readFile(join(root, ".hallpass", "compiled.json"), "utf8")).compilerVersion, "0.1.4");
+    assert.equal(JSON.parse(await readFile(join(root, ".hallpass", "compiled.json"), "utf8")).compilerVersion, expectedVersion);
     assert.equal(await missing(join(root, "AGENTS.md")), true);
   } finally {
     await rm(root, { recursive: true, force: true });
