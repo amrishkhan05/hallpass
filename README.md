@@ -30,6 +30,12 @@ npx @amrishkhan05/hallpass init
 
 ---
 
+## 👤 Author
+
+**AmrishKhan** – [website](https://www.amrishkhan.dev)
+
+Email: [amrishkhan05@gmail.com](mailto:amrishkhan05@gmail.com)
+
 ## ⚡ Quick start (no PhD required)
 
 ```bash

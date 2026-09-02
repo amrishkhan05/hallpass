@@ -4,6 +4,10 @@
   "description": "Runtime policy enforcement for AI coding agents.",
   "type": "module",
   "license": "MIT",
+  "author": {
+    "name": "Amrish Khan",
+    "url": "https://www.amrishkhan.dev"
+  },
   "bin": {
     "hallpass": "./dist/cli/index.js"
   },
