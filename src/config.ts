@@ -7,6 +7,16 @@ const classifications = new Set<Classification>(["deterministic", "structural", 
 const decisions = new Set<Decision>(["allow", "audit", "warn", "require-approval", "block"]);
 const detectorTypes = new Set<DetectorType>(["protected-file", "forbidden-path", "generated-file", "dependency-change", "forbidden-dependency", "forbidden-import", "required-import", "typescript-any", "ts-ignore", "eslint-disable", "test-deletion", "required-command", "max-changed-files", "max-changed-loc", "governance-modification", "shell-command"]);
 export const defaultGovernance = ["hallpass.config.yml", ".hallpass.yml", ".hallpass/**", "AGENTS.md", "CLAUDE.md", ".claude/hooks/**", ".claude/settings.json", ".cursor/hooks.json", ".github/workflows/**"];
+export const unconfiguredConfig: HallpassConfig = {
+  version: 1,
+  profile: "balanced",
+  persona: { enabled: true, intensity: 2 },
+  sources: [],
+  conflicts: { behavior: "block" },
+  overrides: { enabled: true, requireReason: true },
+  governance: { protect: defaultGovernance },
+  rules: [],
+};
 
 export class ConfigurationError extends Error { override name = "ConfigurationError" }
 
@@ -78,4 +88,9 @@ export async function loadConfig(root: string): Promise<{ config: HallpassConfig
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   }
   throw new ConfigurationError("No hallpass.config.yml or .hallpass.yml found. Run `hallpass init`.");
+}
+
+export async function loadConfigOrDefault(root: string): Promise<{ config: HallpassConfig; path?: string }> {
+  try { return await loadConfig(root); }
+  catch (error) { if (error instanceof ConfigurationError && error.message.startsWith("No hallpass.config")) return { config: unconfiguredConfig }; throw error; }
 }

@@ -14,6 +14,7 @@ function scoped(rule: HallpassRule, file: ChangedFile): boolean {
 
 export function applyProfile(rule: HallpassRule, profile: HallpassConfig["profile"]): HallpassRule {
   if (rule.source?.type !== "generated") return rule;
+  if (rule.enforcement === "require-approval") return rule;
   const enforcement = profile === "advisory" ? "warn"
     : profile === "lockdown" ? "block"
       : profile === "strict" ? rule.classification === "advisory" ? "warn" : "block"

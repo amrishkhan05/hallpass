@@ -18,6 +18,8 @@ npm install -g @amrishkhan05/hallpass
 hallpass init
 ```
 
+`AGENTS.md` is optional. Interactive initialization offers to create a concise starter; non-interactive runs create it only with `hallpass init --create-agents` (add `--force` to replace an existing file).
+
 Or, if you hate installing globals (who doesn’t?), just run it on the fly:
 
 ```bash
@@ -32,6 +34,8 @@ npx @amrishkhan05/hallpass init
 
 ```bash
 hallpass scan          # Gather every instruction we can find
+hallpass agents suggest # Preview evidence-backed AGENTS.md suggestions
+hallpass agents init    # Review and create AGENTS.md explicitly
 hallpass rules         # Turn them into policies
 hallpass check         # See if your changes pass the test
 hallpass check --staged
@@ -49,6 +53,27 @@ Add `--json` to any command for machine‑readable output. Exit codes are our wa
 - `3` – engine failure
 - `4` – approval needed
 - `5` – unresolved conflict
+
+---
+
+## 🛡️ What v0.1 actually enforces
+
+---
+
+## ✨ New Features & Commands
+
+- **Plugin installation**: `hallpass install claude`, `hallpass install cursor`, `hallpass install all` – wires native pre‑tool hooks for Claude Code, Cursor, etc.
+- **Additional CLI commands**:
+  - `hallpass scan` – discovers all instruction files in the repo.
+  - `hallpass rules` – compiles and lists enforced policies.
+  - `hallpass check` – validates current changes against policies.
+  - `hallpass ci --base <ref>` – CI‑friendly mode for CI pipelines.
+  - `hallpass explain <RULE>` – deep‑dive into a specific rule.
+  - `hallpass context <path>` – shows why a rule fired for a file.
+  - `hallpass doctor` – health check of the Hallpass engine.
+  - `hallpass conflicts` – detects rule clashes.
+- **Skill file**: The repository includes a `skills/hallpass/SKILL.md` that describes Hallpass capabilities for AI agents, enabling agents to invoke Hallpass automatically when relevant.
+- **Trusted Publishing**: Publishing now uses npm Trusted Publishing with OIDC; the workflow checks for existing versions before publishing.
 
 ---
 
@@ -95,6 +120,8 @@ It recursively hunts for:
 - `.cursor/rules/**/*.md` & `.cursor/rules/**/*.mdc`
 - `.github/copilot-instructions.md`
 - `.github/instructions/**/*.instructions.md`
+
+`hallpass scan` reports policy as `CONFIGURED` when Hallpass config exists, `INFERRED` when only supported instruction files contain usable guidance, and `UNCONFIGURED` otherwise. Built-in safety remains active in every state; generated suggestions are not active policy until a human explicitly adopts them.
 
 We keep the source file, line, original text, compiler version, and a fingerprint for every proposal. If two rules clash, `hallpass conflicts` will point it out—Hallpass never picks a winner in secret.
 

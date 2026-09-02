@@ -228,4 +228,5 @@ test("shell adapters normalize payloads without coupling policy to an agent", ()
   assert.equal(adapterResponse("cursor", findings).permission, "deny");
   assert.equal(adapterResponse("claude", findings).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(evaluateShell(normalizeEvent("claude", { command: "hallpass allow DEP-001 --reason self" }, "/repo"), [])[0].ruleId, "GOV-APPROVAL");
+  assert.equal(evaluateShell(normalizeEvent("claude", { command: "git reset --hard" }, "/repo"), [])[0].ruleId, "GOV-GIT");
 });

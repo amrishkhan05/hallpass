@@ -3,13 +3,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 import { URL } from "node:url";
 
 const cli = new URL("../dist/cli/index.js", import.meta.url).pathname;
+const missing = (path) => access(path).then(() => false, (error) => error.code === "ENOENT");
 
 test("built CLI exposes version and help", () => {
   assert.equal(execFileSync(process.execPath, [cli, "--version"], { encoding: "utf8" }).trim(), "0.1.4");
@@ -25,9 +26,77 @@ test("init creates human-owned config and generated state", async () => {
     assert.equal(JSON.parse(result.stdout).config, "hallpass.config.yml");
     assert.match(await readFile(join(root, ".gitignore"), "utf8"), /\.hallpass\//);
     assert.equal(JSON.parse(await readFile(join(root, ".hallpass", "compiled.json"), "utf8")).compilerVersion, "0.1.4");
+    assert.equal(await missing(join(root, "AGENTS.md")), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("scan reports configured, inferred, and unconfigured repositories without requiring AGENTS.md", async () => {
+  for (const expected of ["CONFIGURED", "INFERRED", "UNCONFIGURED"]) {
+    const root = await mkdtemp(join(tmpdir(), "hallpass-cli-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: root });
+      if (expected === "CONFIGURED") await writeFile(join(root, "hallpass.config.yml"), "version: 1\n");
+      if (expected === "INFERRED") await writeFile(join(root, "CLAUDE.md"), "Run npm test before completing a task.\n");
+      const scan = spawnSync(process.execPath, [cli, "scan", "--json"], { cwd: root, encoding: "utf8" });
+      assert.equal(scan.status, 0, scan.stderr);
+      const result = JSON.parse(scan.stdout);
+      assert.equal(result.policyState, expected);
+      assert.equal(result.agentsFileExists, false);
+      if (expected === "INFERRED") assert.equal(result.instructions[0].source.file, "CLAUDE.md");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+});
+
+test("check and context succeed with built-in safety in an unconfigured repository", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hallpass-cli-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Hallpass Test"], { cwd: root });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: root });
+    const checked = spawnSync(process.execPath, [cli, "check", "--json"], { cwd: root, encoding: "utf8" });
+    assert.equal(checked.status, 0, checked.stderr);
+    assert.equal(JSON.parse(checked.stdout).status, "pass");
+    const context = JSON.parse(execFileSync(process.execPath, [cli, "context", "--json"], { cwd: root, encoding: "utf8" }));
+    assert.equal(context.policyState, "UNCONFIGURED");
+    assert.equal(context.projectSpecificEnforcement.length, 0);
+    assert.equal(context.builtInSafety.active, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("init creates AGENTS.md only when explicitly requested and respects overwrite safety", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hallpass-cli-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await writeFile(join(root, "package.json"), '{"scripts":{"check":"npm test"}}\n');
+    const created = spawnSync(process.execPath, [cli, "init", "--create-agents", "--json"], { cwd: root, encoding: "utf8" });
+    assert.equal(created.status, 0, created.stderr);
+    assert.equal(JSON.parse(created.stdout).agents.created, true);
+    assert.match(await readFile(join(root, "AGENTS.md"), "utf8"), /npm run check/);
+    await writeFile(join(root, "AGENTS.md"), "keep me\n");
+    const existing = spawnSync(process.execPath, [cli, "init", "--create-agents", "--force", "--json"], { cwd: root, encoding: "utf8" });
+    assert.equal(existing.status, 0, existing.stderr);
+    assert.equal(JSON.parse(existing.stdout).agents.overwritten, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("agents suggest is read-only and agents init never overwrites silently", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hallpass-cli-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await writeFile(join(root, "package.json"), '{"scripts":{"check":"npm run typecheck && npm test"}}\n');
+    const suggested = JSON.parse(execFileSync(process.execPath, [cli, "agents", "suggest", "--json"], { cwd: root, encoding: "utf8" }));
+    assert.equal(await missing(join(root, "AGENTS.md")), true);
+    assert.deepEqual(suggested.suggestions[0], { text: "Run `npm run check` before completing a task.", origin: "repository-derived", evidence: { file: "package.json", path: "scripts.check" }, confidence: "deterministic" });
+    const initialized = JSON.parse(execFileSync(process.execPath, [cli, "agents", "init", "--json"], { cwd: root, encoding: "utf8" }));
+    assert.equal(initialized.created, true);
+    await writeFile(join(root, "AGENTS.md"), "keep me\n");
+    const unchanged = JSON.parse(execFileSync(process.execPath, [cli, "agents", "init", "--json"], { cwd: root, encoding: "utf8" }));
+    assert.equal(unchanged.created, false);
+    assert.equal(await readFile(join(root, "AGENTS.md"), "utf8"), "keep me\n");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("install wires claude and cursor pre-tool hooks and is idempotent", async () => {

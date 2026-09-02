@@ -6,13 +6,15 @@ import { watch as watchRepository } from "node:fs";
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { parse, stringify } from "yaml";
+import { agentsFileExists, policyConfigPath, policyState, renderStarter, suggestAgents, writeStarter } from "../agents.js";
 import { addApproval, approvals, isApproved } from "../approvals.js";
 import { baselineFingerprints, clearBaseline, saveBaseline } from "../baseline.js";
 import { adapterResponse, capabilities, evaluateShell, normalizeEvent } from "../adapters.js";
 import { readAudit, recordAudit } from "../audit.js";
-import { ConfigurationError, loadConfig, validateConfig } from "../config.js";
-import { compilePolicies, conflicts as findConflicts, duplicates as findDuplicates, scanInstructions, sourcesFingerprint } from "../compiler.js";
+import { ConfigurationError, loadConfig, loadConfigOrDefault, validateConfig } from "../config.js";
+import { compilePolicies, conflicts as findConflicts, discoverSources, duplicates as findDuplicates, scanInstructions, sourcesFingerprint } from "../compiler.js";
 import { EXIT, VERSION, type HallpassConfig, type ShellActionEvent, type Violation } from "../core/types.js";
 import { applyProfile, evaluate } from "../engine.js";
 import { repositoryRoot, type DiffOptions } from "../git.js";
@@ -28,6 +30,12 @@ const readStdin = async (): Promise<string> => {
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8");
 };
+const interactive = (): boolean => Boolean(process.stdin.isTTY && process.stdout.isTTY);
+async function ask(question: string): Promise<string> {
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try { return (await prompt.question(question)).trim().toLowerCase(); }
+  finally { prompt.close(); }
+}
 
 async function root(): Promise<string> { return repositoryRoot(process.cwd()); }
 async function compile(rootPath: string): Promise<{ instructions: Awaited<ReturnType<typeof scanInstructions>>; rules: Awaited<ReturnType<typeof compilePolicies>>; conflicts: ReturnType<typeof findConflicts>; duplicates: ReturnType<typeof findDuplicates>; fingerprint: string; policyHash: string }> {
@@ -53,12 +61,19 @@ const initialConfig: HallpassConfig = {
   rules: [],
 };
 
-program.command("init").description("Initialize Hallpass in this Git repository").option("--agent <name>", "install one supported adapter hook").option("--all-agents", "install all supported adapter hooks").option("--no-hooks", "do not install hooks").option("--force", "replace existing configuration").option("--json", "emit JSON").action(async (options) => {
+program.command("init").description("Initialize Hallpass in this Git repository").option("--agent <name>", "install one supported adapter hook").option("--all-agents", "install all supported adapter hooks").option("--no-hooks", "do not install hooks").option("--create-agents", "create a starter AGENTS.md").option("--force", "replace existing configuration and explicitly requested AGENTS.md").option("--json", "emit JSON").action(async (options) => {
   const rootPath = await root();
   const configPath = join(rootPath, "hallpass.config.yml");
   if (!options.force) {
     try { await stat(configPath); throw new ConfigurationError("hallpass.config.yml already exists. Use --force to replace it."); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
+  const suggestions = await suggestAgents(rootPath);
+  let agents = { created: false, path: "AGENTS.md", overwritten: false, suggestionCount: suggestions.length };
+  if (options.createAgents) agents = await writeStarter(rootPath, suggestions, Boolean(options.force));
+  else if (!await agentsFileExists(rootPath) && interactive() && !options.json) {
+    const choice = await ask("No AGENTS.md found.\n\nHallpass can work without one, but AGENTS.md gives coding agents a\nhuman-readable source of repository instructions.\n\nCreate one now?\n\n  Yes — generate a starter AGENTS.md\n  No — use Hallpass config only\n  Not now\n\nChoose [Y/n/later]: ");
+    if (!choice || choice === "y" || choice === "yes" || choice === "1") agents = await writeStarter(rootPath, suggestions);
   }
   const compiled = await compile(rootPath);
   const config = { ...initialConfig, rules: compiled.rules };
@@ -76,13 +91,56 @@ program.command("init").description("Initialize Hallpass in this Git repository"
     if (!spec) throw new ConfigurationError(`Unknown hook-capable agent: ${name}.`);
     hooks[name] = await mergeHook(join(rootPath, ...spec.file), spec.base ?? {}, spec.group, spec.entry, spec.match);
   }
-  const summary = { schemaVersion: 1, repository: rootPath, sources: [...new Set(result.instructions.map((item) => item.source.file))], instructions: result.instructions.length, classifications: countBy(result.instructions.map((item) => item.classification)), duplicates: result.duplicates.length, conflicts: result.conflicts.length, config: "hallpass.config.yml", hooks };
+  const summary = { schemaVersion: 1, repository: rootPath, policyState: "CONFIGURED", agents, sources: [...new Set(result.instructions.map((item) => item.source.file))], instructions: result.instructions.length, classifications: countBy(result.instructions.map((item) => item.classification)), duplicates: result.duplicates.length, conflicts: result.conflicts.length, config: "hallpass.config.yml", hooks };
   print(options.json ? summary : `HALLPASS INIT\n\nRepository detected.\n${summary.sources.length} instruction sources, ${summary.instructions} instructions, ${summary.duplicates} duplicates, ${summary.conflicts} conflicts.\n\nReview hallpass.config.yml and add approved blocking rules.`, options.json);
 });
 
 program.command("scan").description("Discover and classify repository instructions").option("--json", "emit JSON").action(async (options) => {
-  const result = await compile(await root());
-  print(options.json ? { schemaVersion: 1, ...result } : `HALLPASS SCAN\n\n${result.instructions.map((item) => `${item.classification.padEnd(13)} ${item.source.file}:${item.source.line}  ${item.text}`).join("\n") || "No instructions found."}\n\n${result.duplicates.length} duplicates; ${result.conflicts.length} possible conflicts.`, options.json);
+  const rootPath = await root();
+  const [result, state, instructionSources, hasAgents, configSource] = await Promise.all([compile(rootPath), policyState(rootPath), discoverSources(rootPath), agentsFileExists(rootPath), policyConfigPath(rootPath)]);
+  const sources = [...(configSource ? [configSource] : []), ...instructionSources];
+  const sourceLines = sources.map((source) => `✓ ${source}`);
+  if (!hasAgents) sourceLines.push("— AGENTS.md not present");
+  const classifications = countBy(result.rules.map((rule) => rule.classification));
+  const text = sources.length
+    ? `HALLPASS SCAN\n\nPolicy sources\n\n${sourceLines.join("\n")}\n\nPolicy state: ${state}\n\nCompiled:\n${classifications.deterministic ?? 0} deterministic rules\n${classifications.structural ?? 0} structural rules\n${(classifications.heuristic ?? 0) + (classifications.semantic ?? 0) + (classifications.advisory ?? 0)} advisory instructions`
+    : `HALLPASS SCAN\n\nNo project-specific policy sources found.\n\n— AGENTS.md not present\n\nPolicy state: ${state}\n\nBuilt-in safety guard: active\n\nRun \`hallpass init\` to configure repository policy.`;
+  print(options.json ? { schemaVersion: 1, agentsFileExists: hasAgents, policyState: state, sources, ...result } : text, options.json);
+});
+
+const agentsCommand = program.command("agents").description("Suggest or create repository agent instructions");
+agentsCommand.command("suggest").description("Suggest AGENTS.md instructions without modifying files").option("--json", "emit JSON").action(async (options) => {
+  const rootPath = await root();
+  const [suggestions, hasAgents, state] = await Promise.all([suggestAgents(rootPath), agentsFileExists(rootPath), policyState(rootPath)]);
+  const result = { schemaVersion: 1, agentsFileExists: hasAgents, policyState: state, suggestions };
+  if (options.json) print(result, true);
+  else {
+    const groups = [
+      ["Repository-derived", suggestions.filter((item) => item.origin === "repository-derived")],
+      ["Existing policy", suggestions.filter((item) => item.origin === "existing-policy")],
+      ["Hallpass recommendations", suggestions.filter((item) => item.origin === "hallpass-recommended")],
+    ] as const;
+    let number = 0;
+    const body = groups.filter(([, items]) => items.length).map(([title, items]) => `${title}:\n\n${items.map((item) => `${++number}. ${item.text}\n   Evidence: ${item.evidence.file}${item.evidence.path ? ` (${item.evidence.path})` : ""}`).join("\n\n")}`).join("\n\n");
+    print(`Suggested AGENTS.md rules\n\n${body}\n\nThese are suggestions, not active policy.\n\nRun:\nhallpass agents init\n\nto review and create AGENTS.md.`);
+  }
+});
+agentsCommand.command("init").description("Review and create a starter AGENTS.md").option("--force", "replace an existing AGENTS.md").option("--json", "emit JSON").action(async (options) => {
+  const rootPath = await root();
+  const suggestions = await suggestAgents(rootPath);
+  const present = await agentsFileExists(rootPath);
+  if (present && !options.force && !interactive()) {
+    const result = { schemaVersion: 1, created: false, path: "AGENTS.md", overwritten: false, suggestionCount: suggestions.length };
+    print(options.json ? result : "AGENTS.md already exists; left untouched. Use --force to replace it.", Boolean(options.json));
+    return;
+  }
+  if (interactive() && !options.json) {
+    const content = renderStarter(suggestions);
+    const answer = await ask(`${content}\n${present ? "AGENTS.md already exists. Replace it?" : "Create AGENTS.md with this content?"} [y/N]: `);
+    if (answer !== "y" && answer !== "yes") { print("AGENTS.md was not changed."); return; }
+  }
+  const result = await writeStarter(rootPath, suggestions, Boolean(options.force || present));
+  print(options.json ? { schemaVersion: 1, ...result } : `${result.overwritten ? "Replaced" : "Created"} AGENTS.md with ${result.suggestionCount} suggestions.`, Boolean(options.json));
 });
 
 program.command("sync").description("Refresh compiled instruction proposals").option("--json", "emit JSON").action(async (options) => {
@@ -103,7 +161,7 @@ program.command("rules").description("List approved policy rules").option("--jso
 interface CheckOptions { staged?: boolean; commit?: string; base?: string; files?: string[]; json?: boolean; noPersona?: boolean; format?: string }
 async function runCheck(options: CheckOptions, ci = false): Promise<void> {
   const rootPath = await root();
-  const { config } = await loadConfig(rootPath);
+  const { config } = await loadConfigOrDefault(rootPath);
   const diff: DiffOptions = { ...(options.staged ? { staged: true } : {}), ...(options.commit ? { commit: options.commit } : {}), ...(options.base ? { base: options.base } : {}), ...(options.files?.length ? { files: options.files } : {}), ...(ci && !options.base && !options.commit && !options.staged ? { commit: "HEAD" } : {}) };
   const report = await evaluate(rootPath, config, diff);
   await recordAudit(rootPath, report, ci ? "ci" : "generic");
@@ -178,10 +236,10 @@ program.command("explain").description("Explain a rule or the last report").argu
 });
 
 program.command("context").alias("effective").description("Show policy applicable to a path").argument("[path]", "repository-relative path", ".").option("--json", "emit JSON").action(async (path, options) => {
-  const rootPath = await root(); const { config } = await loadConfig(rootPath); const compiled = await compile(rootPath);
+  const rootPath = await root(); const { config } = await loadConfigOrDefault(rootPath); const compiled = await compile(rootPath); const state = await policyState(rootPath);
   const rules = config.rules.filter((rule) => (!rule.scope?.include?.length || matchesAny(path, rule.scope.include)) && (!rule.scope?.exclude?.length || !matchesAny(path, rule.scope.exclude)));
-  const context = { schemaVersion: 1, path, rules, blocked: rules.filter((rule) => rule.enforcement === "block"), approvalRequired: rules.filter((rule) => rule.enforcement === "require-approval"), protectedFiles: config.governance.protect, requiredValidations: rules.filter((rule) => rule.detector.type === "required-command").map((rule) => rule.detector.command).filter(Boolean), conflicts: compiled.conflicts };
-  print(options.json ? context : `EFFECTIVE POLICY\n\n${rules.map((rule) => `${rule.id} ${rule.enforcement}  ${rule.title}${rule.locked ? " (locked)" : ""}`).join("\n") || "No path-specific rules."}\n\nProtected: ${context.protectedFiles.join(", ")}\nValidations: ${context.requiredValidations.join(", ") || "none"}\nConflicts: ${context.conflicts.length}`, options.json);
+  const context = { schemaVersion: 1, path, policyState: state, projectSpecificEnforcement: rules.length ? rules : [], builtInSafety: { active: true, protected: ["destructive Git operations", "Hallpass governance", "approval integrity"] }, rules, blocked: rules.filter((rule) => rule.enforcement === "block"), approvalRequired: rules.filter((rule) => rule.enforcement === "require-approval"), protectedFiles: config.governance.protect, requiredValidations: rules.filter((rule) => rule.detector.type === "required-command").map((rule) => rule.detector.command).filter(Boolean), conflicts: compiled.conflicts };
+  print(options.json ? context : `EFFECTIVE POLICY\n\nPolicy state: ${state}\n\nProject-specific enforcement:\n${rules.map((rule) => `${rule.id} ${rule.enforcement}  ${rule.title}${rule.locked ? " (locked)" : ""}`).join("\n") || "none"}\n\nBuilt-in safety:\nactive\n\nProtected by default:\n- destructive Git operations\n- Hallpass governance\n- approval integrity${state === "UNCONFIGURED" ? "\n\nRecommended:\nhallpass init" : ""}`, options.json);
 });
 
 program.command("doctor").description("Diagnose repository policy health").option("--agent <name>").option("--json", "emit JSON").action(async (options) => {

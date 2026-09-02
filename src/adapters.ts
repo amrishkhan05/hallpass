@@ -27,8 +27,12 @@ export function adapterResponse(adapter: string, findings: Violation[]): Record<
 }
 
 export function evaluateShell(event: ShellActionEvent, rules: HallpassRule[]): Violation[] {
-  const governance = /\bhallpass\s+allow\b|\.hallpass\/approvals\.json/.test(event.command) ? [{ id: "GOV-APPROVAL", title: "Agents cannot grant their own approvals", classification: "deterministic", enforcement: "block", locked: true, detector: { type: "shell-command", commands: [event.command] } } satisfies HallpassRule] : [];
-  return [...governance, ...rules].filter((rule) => rule.detector.type === "shell-command").flatMap((rule) => {
+  const coveredByProjectPolicy = rules.some((rule) => rule.detector.type === "shell-command" && rule.enforcement !== "allow" && rule.detector.commands?.some((command) => event.command.includes(command)));
+  const builtIn = [
+    ...(/\bhallpass\s+allow\b|\.hallpass\/approvals\.json/.test(event.command) ? [{ id: "GOV-APPROVAL", title: "Agents cannot grant their own approvals", classification: "deterministic", enforcement: "block", locked: true, detector: { type: "shell-command", commands: [event.command] } } satisfies HallpassRule] : []),
+    ...(!coveredByProjectPolicy && /\bgit\s+(?:reset\s+--hard|clean\s+-[^\s]*f|checkout\s+--)(?:\s|$)/.test(event.command) ? [{ id: "GOV-GIT", title: "Destructive Git operations require human control", classification: "deterministic", enforcement: "block", locked: true, detector: { type: "shell-command", commands: [event.command] } } satisfies HallpassRule] : []),
+  ];
+  return [...builtIn, ...rules].filter((rule) => rule.detector.type === "shell-command").flatMap((rule) => {
     const matched = rule.detector.commands?.find((command) => event.command.includes(command));
     if (!matched || rule.enforcement === "allow") return [];
     const id = fingerprint(rule.id, event.command, matched);

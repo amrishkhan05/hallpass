@@ -82,7 +82,7 @@ function createCompiledRuleFromInstruction(instruction: Instruction, id: string,
     command?: string;
     action?: "add" | "remove" | "any";
   } = (() => {
-    if (/dependenc/.test(lower)) return { type: "dependency-change", action: "add", title: "New dependencies are forbidden", enforcement: "block", classification: "deterministic", scope: { include: baseScope, exclude: ["node_modules/**", "dist/**"] } };
+    if (/dependenc/.test(lower)) return { type: "dependency-change", action: "add", title: /approval/.test(lower) ? "New dependencies require approval" : "New dependencies are forbidden", enforcement: /approval/.test(lower) ? "require-approval" : "block", classification: "deterministic", scope: { include: baseScope, exclude: ["node_modules/**", "dist/**"] } };
     if (/generated|do not edit|do not modify/.test(lower)) return { type: "generated-file", paths: ["**/*.generated.*", "**/generated/**", "**/*.gen.*"], title: "Generated files are protected", enforcement: "block", classification: "deterministic", scope: { include: baseScope } };
     if (/controller|service|repository|architecture|layer/.test(lower)) return { type: "forbidden-import", imports: ["@prisma/client", "prisma", "typeorm", "sequelize"], title: "Architecture boundaries must be respected", enforcement: "block", classification: "structural", scope: { include: ["src/**/*.ts", "apps/**/*.ts", "libs/**/*.ts"] } };
     if (/typescript.*any|\bany\b/.test(lower)) return { type: "typescript-any", title: "Explicit any is forbidden", enforcement: "warn", classification: "deterministic", scope: { include: ["**/*.ts"] } };
