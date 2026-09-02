@@ -1,6 +1,6 @@
 {
   "name": "hallpass",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Runtime policy enforcement for AI coding agents. Blocks policy-violating diffs and shell commands before they land.",
   "author": { "name": "Amrish Khan", "url": "https://github.com/amrishkhan05" },
   "homepage": "https://github.com/amrishkhan05/hallpass",

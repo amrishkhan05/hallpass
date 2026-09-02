@@ -1,11 +1,11 @@
-import type { AdapterCapabilities, FileDeleteEvent, FileWriteEvent, HallpassEvent, ShellActionEvent, Violation, GitOperationEvent, DependencyEvent, ConfigModifyEvent, NormalizedAction } from "./core/types.js";
+import type { AdapterCapabilities, FileDeleteEvent, FileWriteEvent, HallpassEvent, ShellActionEvent, Violation, NormalizedAction } from "./core/types.js";
 import type { HallpassRule } from "./core/types.js";
 import { fingerprint } from "./utils.js";
-import { normalizeClaudeEvent } from "./adapters/claude.js";
-import { normalizeCursorEvent } from "./adapters/cursor.js";
-import { normalizeCopilotEvent } from "./adapters/copilot.js";
-import { normalizeCodexEvent } from "./adapters/codex.js";
-import { isGitCommand, isPackageManagerCommand, isConfigFile, extractGitSubcommand, extractPackageInfo, buildAction } from "./adapters/helpers.js";
+import { normalizeClaudeEvent, type ClaudePayload } from "./adapters/claude.js";
+import { normalizeCursorEvent, type CursorPayload } from "./adapters/cursor.js";
+import { normalizeCopilotEvent, type CopilotPayload } from "./adapters/copilot.js";
+import { normalizeCodexEvent, type CodexPayload } from "./adapters/codex.js";
+import { isGitCommand, isPackageManagerCommand, isConfigFile, extractGitSubcommand, extractPackageInfo, buildAction, categorizeGitCommand } from "./adapters/helpers.js";
 
 export const capabilities: Record<string, AdapterCapabilities> = {
   generic: {
@@ -41,16 +41,16 @@ export function normalizeEvent(adapter: string, payload: Record<string, unknown>
 
   // Dispatch to adapter-specific normalization
   if (adapter === "claude") {
-    return normalizeClaudeEvent(payload as any, baseId, baseTime, cwd);
+    return normalizeClaudeEvent(payload as ClaudePayload, baseId, baseTime, cwd);
   }
   if (adapter === "cursor") {
-    return normalizeCursorEvent(payload as any, baseId, baseTime, cwd);
+    return normalizeCursorEvent(payload as CursorPayload, baseId, baseTime, cwd);
   }
   if (adapter === "copilot") {
-    return normalizeCopilotEvent(payload as any, baseId, baseTime, cwd);
+    return normalizeCopilotEvent(payload as CopilotPayload, baseId, baseTime, cwd);
   }
   if (adapter === "codex") {
-    return normalizeCodexEvent(payload as any, baseId, baseTime, cwd);
+    return normalizeCodexEvent(payload as CodexPayload, baseId, baseTime, cwd);
   }
 
   // Fallback: generic normalization
@@ -77,7 +77,7 @@ export function normalizeEvent(adapter: string, payload: Record<string, unknown>
     // If it's a git command, add git-specific action info
     if (isGitCommand(command)) {
       const { subcommand, ref, remote } = extractGitSubcommand(command);
-      const gitAction: NormalizedAction = { category: `git.${subcommand}` as any };
+      const gitAction: NormalizedAction = { category: categorizeGitCommand(subcommand) };
       if (ref) gitAction.target = ref;
       shellEvent.action = gitAction;
       const metadata: Record<string, unknown> = { ...shellEvent.metadata, gitSubcommand: subcommand };
@@ -88,7 +88,7 @@ export function normalizeEvent(adapter: string, payload: Record<string, unknown>
     // If it's a package manager command, add dependency info
     if (isPackageManagerCommand(command)) {
       const { manager, action, package: pkg } = extractPackageInfo(command);
-      const depAction: NormalizedAction = { category: `dependency.${action}` as any };
+      const depAction: NormalizedAction = { category: action === "add" ? "dependency.add" : "dependency.remove" };
       if (pkg) depAction.target = pkg;
       shellEvent.action = depAction;
       const metadata: Record<string, unknown> = { ...shellEvent.metadata, packageManager: manager };

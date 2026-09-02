@@ -1,2 +1,2 @@
 // AUTO-GENERATED from package.json — do not edit.
-export const VERSION = "0.1.5";
+export const VERSION = "0.2.0";

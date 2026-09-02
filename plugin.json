@@ -1,6 +1,6 @@
 {
   "name": "hallpass",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Runtime policy enforcement for AI coding agents. Scans AGENTS.md, CLAUDE.md, Cursor rules, and Copilot instructions, compiles them into enforceable policy, and blocks violating diffs and shell commands before they land.",
   "homepage": "https://github.com/amrishkhan05/hallpass",
   "repository": "https://github.com/amrishkhan05/hallpass",

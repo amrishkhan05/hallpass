@@ -295,9 +295,6 @@ export function conflicts(instructions: Instruction[]): PolicyConflict[] {
       const b = instructions[right];
       if (!a || !b) continue;
 
-      const aText = a.text.toLowerCase();
-      const bText = b.text.toLowerCase();
-
       // Conflict 1: Explicit dependency ban vs. any instruction to use/require/install something
       const aBansDeps = /\b(?:never|do not|must not)\b.*\b(?:add|install|use)\b.*\bdependenc/i.test(a.text);
       const bUsesSomething = /\b(?:use|install|require|leverage)\b\s+(?:the\s+)?(?:package\s+)?(@?[\w-]+)/i.test(b.text);
