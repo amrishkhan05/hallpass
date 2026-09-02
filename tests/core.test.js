@@ -243,6 +243,10 @@ test("shell adapters normalize payloads without coupling policy to an agent", ()
   assert.equal(adapterResponse("claude", findings).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(evaluateShell(normalizeEvent("claude", { command: "hallpass allow DEP-001 --reason self" }, "/repo"), [])[0].ruleId, "GOV-APPROVAL");
   assert.equal(evaluateShell(normalizeEvent("claude", { command: "git reset --hard" }, "/repo"), [])[0].ruleId, "GOV-GIT");
+
+  const cursorEvent = normalizeEvent("cursor", { command: "git reset --hard" }, "/repo");
+  assert.equal(cursorEvent.type, "shell.execute");
+  assert.equal(evaluateShell(cursorEvent, [])[0].ruleId, "GOV-GIT");
 });
 
 test("action model normalizes git commands with subcommand and ref extraction", () => {

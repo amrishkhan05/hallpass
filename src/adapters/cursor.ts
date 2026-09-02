@@ -9,6 +9,7 @@ export interface CursorPayload {
     tool_name?: string;
     file_path?: string;
     content?: string;
+    command?: string;
     selected_files?: string[];
     expanded_folders?: string[];
     open_tabs?: string[];
@@ -66,8 +67,8 @@ export function normalizeCursorEvent(payload: CursorPayload, baseId: string, bas
         };
     }
 
-    if (toolName === "Terminal" || toolName === "Shell" || toolName === "Bash") {
-        const command = content || "";
+    if (toolName === "Terminal" || toolName === "Shell" || toolName === "Bash" || payload.command) {
+        const command = payload.command || content || "";
 
         if (isGitCommand(command)) {
             const { subcommand, ref } = extractGitSubcommand(command);
