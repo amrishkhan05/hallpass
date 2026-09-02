@@ -1,0 +1,14 @@
+---
+description: Hallpass, runtime policy enforcement. Check changes against the compiled repository policy before finishing a task.
+globs:
+alwaysApply: true
+---
+
+# Hallpass
+
+This repository uses Hallpass to enforce the rules already written in AGENTS.md,
+CLAUDE.md, `.cursor/rules`, and Copilot instructions. Before ending a task that
+changed files, run `hallpass check` (or `hallpass check --staged` if you staged
+your changes). Fix any reported violation or request approval with
+`hallpass allow <ruleId> --reason "..."` — never edit `.hallpass/` or
+`hallpass.config.yml` to silence a finding yourself.

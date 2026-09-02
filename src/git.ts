@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import type { ChangedFile, GitChangeSet } from "./core/types.js";
 
 const exec = promisify(execFile);
-export interface DiffOptions { staged?: boolean; commit?: string; base?: string }
+export interface DiffOptions { staged?: boolean; commit?: string; base?: string; files?: string[] }
 
 async function git(cwd: string, args: string[], allowFailure = false): Promise<string> {
   try { return (await exec("git", args, { cwd, maxBuffer: 20 * 1024 * 1024 })).stdout; }
@@ -66,9 +66,11 @@ export async function gitChanges(cwd: string, options: DiffOptions = {}): Promis
   else if (options.commit) { args.push(`${options.commit}^`, options.commit); baseline = `${options.commit}^`; }
   else if (options.base) { args.push(`${options.base}...HEAD`); baseline = options.base; }
   else args.push("HEAD");
+  if (options.files?.length) args.push("--", ...options.files);
   const files = parsePatch(await git(root, args));
   if (!options.staged && !options.commit && !options.base) {
-    const untracked = (await git(root, ["ls-files", "--others", "--exclude-standard", "-z"])).split("\0").filter(Boolean);
+    const untrackedArgs = ["ls-files", "--others", "--exclude-standard", "-z", ...(options.files?.length ? ["--", ...options.files] : [])];
+    const untracked = (await git(root, untrackedArgs)).split("\0").filter(Boolean);
     for (const path of untracked) {
       const text = await readFile(join(root, path), "utf8").catch(() => "");
       files.push({ path, status: "added", additions: text.split("\n").map((value, index) => ({ line: index + 1, text: value })), deletions: [] });

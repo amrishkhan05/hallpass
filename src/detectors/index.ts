@@ -2,7 +2,7 @@ import type { DetectorType } from "../core/types.js";
 import { detectRequiredCommand } from "./completion.js";
 import { detectDependencies } from "./dependencies.js";
 import { detectDeletedTests, detectMaxFiles, detectMaxLoc, detectPaths } from "./files.js";
-import { detectImports, detectTypeScript } from "./source.js";
+import { detectImports, detectRequiredImports, detectTypeScript } from "./source.js";
 import type { Detector } from "./types.js";
 
 export const detectors: Partial<Record<DetectorType, Detector>> = {
@@ -17,6 +17,7 @@ export const detectors: Partial<Record<DetectorType, Detector>> = {
   "ts-ignore": detectTypeScript,
   "eslint-disable": detectTypeScript,
   "forbidden-import": detectImports,
+  "required-import": detectRequiredImports,
   "dependency-change": detectDependencies,
   "forbidden-dependency": detectDependencies,
   "required-command": detectRequiredCommand,

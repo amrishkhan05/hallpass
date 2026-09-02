@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { relative, join } from "node:path";
 import type { HallpassRule, Instruction, PolicyConflict } from "./core/types.js";
+import { VERSION } from "./core/types.js";
 import { fingerprint, matchesAny } from "./utils.js";
 
 const ignored = new Set([".git", ".hallpass", "node_modules", "dist", "coverage"]);
@@ -63,11 +64,12 @@ function specificityFor(patterns: string[] = ["**/*"]): number {
   }, 0);
 }
 
-function createCompiledRuleFromInstruction(instruction: Instruction, index: number): HallpassRule {
+function createCompiledRuleFromInstruction(instruction: Instruction, id: string, compiledAt: string): HallpassRule {
   const text = instruction.text;
   const lower = text.toLowerCase();
   const scopePath = instruction.source.file.replaceAll("\\", "/");
-  const baseScope = ["**/*", scopePath, `**/${scopePath}`];
+  const directory = scopePath.includes("/") ? scopePath.slice(0, scopePath.lastIndexOf("/")) : "";
+  const baseScope = [directory ? `${directory}/**` : "**/*"];
   const classification = instruction.classification === "ambiguous" ? "advisory" : instruction.classification;
   const detection: {
     type: HallpassRule["detector"]["type"];
@@ -80,7 +82,7 @@ function createCompiledRuleFromInstruction(instruction: Instruction, index: numb
     command?: string;
     action?: "add" | "remove" | "any";
   } = (() => {
-    if (/dependenc/.test(lower)) return { type: "dependency-change", action: "add", title: "Dependency changes require approval", enforcement: "require-approval", classification: "deterministic", scope: { include: baseScope, exclude: ["node_modules/**", "dist/**"] } };
+    if (/dependenc/.test(lower)) return { type: "dependency-change", action: "add", title: "New dependencies are forbidden", enforcement: "block", classification: "deterministic", scope: { include: baseScope, exclude: ["node_modules/**", "dist/**"] } };
     if (/generated|do not edit|do not modify/.test(lower)) return { type: "generated-file", paths: ["**/*.generated.*", "**/generated/**", "**/*.gen.*"], title: "Generated files are protected", enforcement: "block", classification: "deterministic", scope: { include: baseScope } };
     if (/controller|service|repository|architecture|layer/.test(lower)) return { type: "forbidden-import", imports: ["@prisma/client", "prisma", "typeorm", "sequelize"], title: "Architecture boundaries must be respected", enforcement: "block", classification: "structural", scope: { include: ["src/**/*.ts", "apps/**/*.ts", "libs/**/*.ts"] } };
     if (/typescript.*any|\bany\b/.test(lower)) return { type: "typescript-any", title: "Explicit any is forbidden", enforcement: "warn", classification: "deterministic", scope: { include: ["**/*.ts"] } };
@@ -97,10 +99,12 @@ function createCompiledRuleFromInstruction(instruction: Instruction, index: numb
     line: instruction.source.line,
     originalText: text,
     fingerprint: instruction.fingerprint,
+    compilerVersion: VERSION,
+    compiledAt,
   };
 
   return {
-    id: `POL-${String(index + 1).padStart(3, "0")}`,
+    id,
     title: detection.title,
     description: text,
     rationale: "Compiled from repository instruction source.",
@@ -123,7 +127,15 @@ function createCompiledRuleFromInstruction(instruction: Instruction, index: numb
 
 export async function compilePolicies(root: string): Promise<HallpassRule[]> {
   const instructions = await scanInstructions(root);
-  return instructions.map((instruction, index) => createCompiledRuleFromInstruction(instruction, index)).sort((left, right) => {
+  const compiledAt = new Date().toISOString();
+  const counts = new Map<string, number>();
+  const prefix = (instruction: Instruction): string => /dependenc/i.test(instruction.text) ? "DEP" : /controller|service|repository|architecture|layer/i.test(instruction.text) ? "ARCH" : /typescript|\bany\b/i.test(instruction.text) ? "TS" : /test|lint|build/i.test(instruction.text) ? "VAL" : /generated/i.test(instruction.text) ? "GEN" : "POL";
+  return instructions.map((instruction) => {
+    const key = prefix(instruction);
+    const number = (counts.get(key) ?? 0) + 1;
+    counts.set(key, number);
+    return createCompiledRuleFromInstruction(instruction, `${key}-${String(number).padStart(3, "0")}`, compiledAt);
+  }).sort((left, right) => {
     const leftSpecificity = specificityFor(left.scope?.include ?? ["**/*"]);
     const rightSpecificity = specificityFor(right.scope?.include ?? ["**/*"]);
     if (left.locked !== right.locked) return Number(Boolean(right.locked)) - Number(Boolean(left.locked));

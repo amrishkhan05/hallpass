@@ -1,0 +1,6 @@
+{
+  "name": "hallpass",
+  "version": "0.1.4",
+  "description": "Runtime policy enforcement for AI coding agents. Run `hallpass check` before finishing a task and `hallpass ci` in CI.",
+  "contextFileName": "AGENTS.md"
+}

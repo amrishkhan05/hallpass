@@ -21,7 +21,14 @@
     "CONTRIBUTING.md",
     "CHANGELOG.md",
     "hallpass.config.example.yml",
-    "assets"
+    "assets",
+    ".claude-plugin",
+    ".codex-plugin",
+    ".cursor",
+    "commands",
+    "hooks",
+    "skills",
+    "plugin.json"
   ],
   "engines": {
     "node": ">=20.19"

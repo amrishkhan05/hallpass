@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
-import type { Classification, Decision, DetectorType, HallpassConfig, HallpassRule } from "./core/types.js";
+import type { Classification, Decision, DetectorType, EnforcementProfile, HallpassConfig, HallpassRule } from "./core/types.js";
 
 const classifications = new Set<Classification>(["deterministic", "structural", "heuristic", "semantic", "advisory"]);
 const decisions = new Set<Decision>(["allow", "audit", "warn", "require-approval", "block"]);
-const detectorTypes = new Set<DetectorType>(["protected-file", "forbidden-path", "generated-file", "dependency-change", "forbidden-dependency", "forbidden-import", "typescript-any", "ts-ignore", "eslint-disable", "test-deletion", "required-command", "max-changed-files", "max-changed-loc", "governance-modification", "shell-command"]);
+const detectorTypes = new Set<DetectorType>(["protected-file", "forbidden-path", "generated-file", "dependency-change", "forbidden-dependency", "forbidden-import", "required-import", "typescript-any", "ts-ignore", "eslint-disable", "test-deletion", "required-command", "max-changed-files", "max-changed-loc", "governance-modification", "shell-command"]);
 export const defaultGovernance = ["hallpass.config.yml", ".hallpass.yml", ".hallpass/**", "AGENTS.md", "CLAUDE.md", ".claude/hooks/**", ".claude/settings.json", ".cursor/hooks.json", ".github/workflows/**"];
 
 export class ConfigurationError extends Error { override name = "ConfigurationError" }
@@ -47,6 +47,8 @@ export function validateConfig(value: unknown): HallpassConfig {
   if (!value || typeof value !== "object") throw new ConfigurationError("configuration: expected an object");
   const raw = value as Record<string, unknown>;
   if (raw.version !== 1) throw new ConfigurationError("version: expected 1");
+  const profile = raw.profile ?? "balanced";
+  if (!["advisory", "balanced", "strict", "lockdown"].includes(profile as string)) throw new ConfigurationError("profile: expected advisory | balanced | strict | lockdown");
   const persona = (raw.persona ?? {}) as Record<string, unknown>;
   const intensity = persona.intensity ?? 2;
   if (![0, 1, 2, 3].includes(intensity as number)) throw new ConfigurationError("persona.intensity: expected 0 | 1 | 2 | 3");
@@ -60,6 +62,7 @@ export function validateConfig(value: unknown): HallpassConfig {
   if (behavior !== "warn" && behavior !== "block") throw new ConfigurationError("conflicts.behavior: expected warn | block");
   return {
     version: 1,
+    profile: profile as EnforcementProfile,
     persona: { enabled: persona.enabled !== false, intensity: intensity as 0 | 1 | 2 | 3 },
     sources: raw.sources === undefined ? ["AGENTS.md", "AGENTS.override.md", "CLAUDE.md", ".cursor/rules", ".github/copilot-instructions.md", ".github/instructions"] : stringArray(raw.sources, "sources"),
     conflicts: { behavior },

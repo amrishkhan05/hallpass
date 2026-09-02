@@ -1,6 +1,7 @@
 import type { ChangedFile, HallpassConfig, HallpassReport, HallpassRule, Violation } from "./core/types.js";
 import { VERSION } from "./core/types.js";
 import { approvals, isApproved } from "./approvals.js";
+import { baselineFingerprints } from "./baseline.js";
 import { defaultGovernance } from "./config.js";
 import { detectors, type Detection } from "./detectors/index.js";
 import type { DiffOptions } from "./git.js";
@@ -9,6 +10,15 @@ import { fingerprint, matchesAny } from "./utils.js";
 
 function scoped(rule: HallpassRule, file: ChangedFile): boolean {
   return (!rule.scope?.include?.length || matchesAny(file.path, rule.scope.include)) && (!rule.scope?.exclude?.length || !matchesAny(file.path, rule.scope.exclude));
+}
+
+export function applyProfile(rule: HallpassRule, profile: HallpassConfig["profile"]): HallpassRule {
+  if (rule.source?.type !== "generated") return rule;
+  const enforcement = profile === "advisory" ? "warn"
+    : profile === "lockdown" ? "block"
+      : profile === "strict" ? rule.classification === "advisory" ? "warn" : "block"
+        : rule.classification === "deterministic" || rule.classification === "structural" ? "block" : rule.classification === "advisory" ? "audit" : "warn";
+  return { ...rule, enforcement };
 }
 
 function violation(rule: HallpassRule, detection: Detection): Violation {
@@ -29,12 +39,12 @@ function violation(rule: HallpassRule, detection: Detection): Violation {
   };
 }
 
-export async function evaluate(root: string, config: HallpassConfig, options: DiffOptions = {}): Promise<HallpassReport> {
+export async function evaluate(root: string, config: HallpassConfig, options: DiffOptions = {}, useBaseline = true): Promise<HallpassReport> {
   const started = performance.now();
   const changes = await gitChanges(root, options);
   const approvalList = await approvals(root);
   const governance: HallpassRule = { id: "GOV-001", title: "Governance files require human approval", classification: "deterministic", enforcement: "require-approval", locked: true, detector: { type: "governance-modification", paths: config.governance.protect.length ? config.governance.protect : defaultGovernance } };
-  const rules = [governance, ...config.rules.filter((rule) => rule.enforcement !== "allow")];
+  const rules = [governance, ...config.rules.filter((rule) => rule.enforcement !== "allow").map((rule) => applyProfile(rule, config.profile))];
   const findings: Violation[] = [];
   for (const rule of rules) {
     const detector = detectors[rule.detector.type];
@@ -45,7 +55,9 @@ export async function evaluate(root: string, config: HallpassConfig, options: Di
       if (!isApproved(approvalList, rule.id, finding.location?.file)) findings.push(finding);
     }
   }
-  const violations = findings.filter((item) => item.decision === "block" || item.decision === "require-approval");
-  const warnings = findings.filter((item) => item.decision === "warn" || item.decision === "audit");
-  return { version: VERSION, status: violations.length ? "fail" : warnings.length ? "warn" : "pass", evaluatedRules: rules.length, violations, warnings, metadata: { durationMs: Math.round(performance.now() - started), baseline: changes.baseline } };
+  const baseline = useBaseline ? new Set(await baselineFingerprints(root)) : new Set<string>();
+  const active = findings.filter((item) => item.ruleId === "GOV-001" || item.category.startsWith("completion.") || !baseline.has(item.fingerprint));
+  const violations = active.filter((item) => item.decision === "block" || item.decision === "require-approval");
+  const warnings = active.filter((item) => item.decision === "warn" || item.decision === "audit");
+  return { schemaVersion: 1, version: VERSION, status: violations.length ? "fail" : warnings.length ? "warn" : "pass", evaluatedRules: rules.length, violations, warnings, metadata: { durationMs: Math.round(performance.now() - started), baseline: changes.baseline, policyHash: fingerprint(rules), configurationHash: fingerprint(config) } };
 }

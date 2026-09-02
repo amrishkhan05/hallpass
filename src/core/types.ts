@@ -2,14 +2,15 @@ export const VERSION = "0.1.4";
 export const EXIT = { PASS: 0, VIOLATION: 1, CONFIG: 2, INTERNAL: 3, APPROVAL: 4, CONFLICT: 5 } as const;
 
 export type Classification = "deterministic" | "structural" | "heuristic" | "semantic" | "advisory";
+export type EnforcementProfile = "advisory" | "balanced" | "strict" | "lockdown";
 export type Decision = "allow" | "audit" | "warn" | "require-approval" | "block";
 export type DetectorType =
   | "protected-file" | "forbidden-path" | "generated-file" | "dependency-change"
-  | "forbidden-dependency" | "forbidden-import" | "typescript-any" | "ts-ignore"
+  | "forbidden-dependency" | "forbidden-import" | "required-import" | "typescript-any" | "ts-ignore"
   | "eslint-disable" | "test-deletion" | "required-command" | "max-changed-files"
   | "max-changed-loc" | "governance-modification" | "shell-command";
 
-export interface RuleSource { type: string; file?: string; line?: number; originalText?: string; fingerprint?: string }
+export interface RuleSource { type: string; file?: string; line?: number; originalText?: string; fingerprint?: string; compilerVersion?: string; compiledAt?: string }
 export interface RuleScope { include?: string[]; exclude?: string[] }
 export interface DetectorConfig {
   type: DetectorType;
@@ -38,6 +39,7 @@ export interface HallpassRule {
 }
 export interface HallpassConfig {
   version: 1;
+  profile: EnforcementProfile;
   persona: { enabled: boolean; intensity: 0 | 1 | 2 | 3 };
   sources: string[];
   conflicts: { behavior: "warn" | "block" };
@@ -69,12 +71,13 @@ export interface Violation {
   fingerprint: string;
 }
 export interface HallpassReport {
+  schemaVersion: 1;
   version: string;
   status: "pass" | "warn" | "fail" | "error";
   evaluatedRules: number;
   violations: Violation[];
   warnings: Violation[];
-  metadata: { durationMs: number; adapter?: string; baseline?: string };
+  metadata: { durationMs: number; adapter?: string; baseline?: string; policyHash?: string; configurationHash?: string };
 }
 export interface Instruction {
   text: string;

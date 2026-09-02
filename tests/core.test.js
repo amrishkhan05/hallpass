@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { validateConfig } from "../dist/config.js";
 import { compilePolicies, conflicts, duplicates, resolveEffectiveRules, scanInstructions } from "../dist/compiler.js";
-import { evaluate } from "../dist/engine.js";
+import { applyProfile, evaluate } from "../dist/engine.js";
+import { saveBaseline } from "../dist/baseline.js";
 import { addApproval } from "../dist/approvals.js";
 import { gitChanges } from "../dist/git.js";
 import { selectComment } from "../dist/persona.js";
@@ -42,6 +43,12 @@ test("configuration rejects unknown enforcement", () => {
     () => validateConfig({ ...baseConfig, rules: [{ id: "X", title: "x", classification: "deterministic", enforcement: "destroy", detector: { type: "protected-file" } }] }),
     /rules\[0\]\.enforcement/,
   );
+});
+
+test("balanced profile blocks deterministic compiled rules without escalating semantic guidance", () => {
+  const generated = { id: "X", title: "x", source: { type: "generated" }, classification: "deterministic", enforcement: "warn", detector: { type: "typescript-any" } };
+  assert.equal(applyProfile(generated, "balanced").enforcement, "block");
+  assert.equal(applyProfile({ ...generated, classification: "semantic" }, "balanced").enforcement, "warn");
 });
 
 test("persona selection is deterministic", () => {
@@ -152,6 +159,18 @@ test("required command is a completion gate", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("required imports are checked and existing findings can be baselined", async () => {
+  const root = await repository();
+  try {
+    await writeFile(join(root, "src", "clean.ts"), "export const clean = false;\n");
+    const config = validateConfig({ ...baseConfig, rules: [{ id: "IMPORT-001", title: "Use the shared logger", classification: "structural", enforcement: "block", scope: { include: ["src/**"] }, detector: { type: "required-import", imports: ["@app/logger"] } }] });
+    const report = await evaluate(root, config);
+    assert.equal(report.violations[0].ruleId, "IMPORT-001");
+    await saveBaseline(root, [report.violations[0].fingerprint]);
+    assert.ok(!(await evaluate(root, config)).violations.some((item) => item.ruleId === "IMPORT-001"));
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("conflicting compiled policies are blocked before approval", async () => {

@@ -24,7 +24,7 @@ Or, if you hate installing globals (who doesn’t?), just run it on the fly:
 npx @amrishkhan05/hallpass init
 ```
 
-`hallpass init` scans for instruction files and drops a proposal into `.hallpass/compiled.json`. It never turns vague prose into a hard stop—review the scan first, then sprinkle your approved rules into `hallpass.config.yml`. The [example config](hallpass.config.example.yml) shows you what’s possible.
+`hallpass init` scans instruction files, activates deterministic policies, and records the compiled policy in `.hallpass/compiled.json`. Semantic and ambiguous guidance remains non-blocking; the [example config](hallpass.config.example.yml) shows the supported rule shape.
 
 ---
 
@@ -65,7 +65,7 @@ Add `--json` to any command for machine‑readable output. Exit codes are our wa
 
 All checks are diff‑aware (working tree, staged, single commit, or base‑ref). Untracked, renamed, deleted, and binary files are normalized as events. Existing debt stays hidden unless the current diff touches it.
 
-Our natural‑language scanner tags instructions as deterministic, structural, semantic, advisory, or ambiguous. Only explicit YAML rules are enforced; heuristics are just friendly suggestions in v0.1.
+Our scanner tags instructions as deterministic, structural, semantic, advisory, or ambiguous. Deterministic and structural rules are enforced; heuristic and semantic interpretations remain warnings.
 
 ---
 
@@ -104,6 +104,12 @@ We keep the source file, line, original text, compiler version, and a fingerprin
 
 The core is agent‑agnostic. `hallpass hook <adapter>` accepts native hook JSON on stdin, normalizes it, runs our policies, and spits out the adapter‑specific permission response.
 
+**One‑command install (Claude Code, Cursor):**
+```bash
+hallpass install all      # or: hallpass install claude / hallpass install cursor
+```
+This merges the hook wiring below into `.claude/settings.json` / `.cursor/hooks.json` without touching any other settings, and is safe to re-run.
+
 **Claude’s pre‑tool hook:**
 ```json
 {
@@ -129,7 +135,12 @@ The core is agent‑agnostic. `hallpass hook <adapter>` accepts native hook JSON
 }
 ```
 
-Claude and Cursor have native pre‑shell responses. Generic Git/CI provides the ultimate diff verification. Codex and Copilot metadata are there, but we don’t claim native lifecycle installation in v0.1.
+Claude and Cursor have native pre‑shell responses. Generic Git/CI provides the ultimate diff verification. Codex and Copilot metadata are there, but we don’t claim native lifecycle installation in v0.1 — instead Hallpass ships a [`skills/hallpass/SKILL.md`](skills/hallpass/SKILL.md) that any skill‑aware agent (Copilot, Codex, Claude) can discover, telling it to run `hallpass check`/`hallpass ci` itself.
+
+**Installing Hallpass as a plugin:**
+- **Claude Code**: `/plugin marketplace add amrishkhan05/hallpass` then `/plugin install hallpass` — wires the `PreToolUse` hook above automatically via [`.claude-plugin/`](.claude-plugin).
+- **Cursor**: the [`.cursor/rules/hallpass.mdc`](.cursor/rules/hallpass.mdc) rule is picked up automatically once the repo is cloned; run `hallpass install cursor` for the enforced pre‑shell hook.
+- **Codex / Copilot / any agent**: point it at [`skills/hallpass/SKILL.md`](skills/hallpass/SKILL.md) (or just keep `AGENTS.md`/`.github/copilot-instructions.md` in the repo — Hallpass already scans those).
 
 ---
 
@@ -202,7 +213,7 @@ Or run it without installing:
 npx @amrishkhan05/hallpass init
 ```
 
-`init` discovers instruction sources and writes proposals to `.hallpass/compiled.json`. It does not silently turn ambiguous prose into blocking policy. Review the scan, then add approved rules to `hallpass.config.yml`; [the example config](hallpass.config.example.yml) documents the supported shape.
+`init` discovers instruction sources, activates deterministic policies, and writes the compiled state to `.hallpass/compiled.json`. Ambiguous prose remains non-blocking; [the example config](hallpass.config.example.yml) documents the supported shape.
 
 ## Quick start
 
@@ -237,7 +248,7 @@ The engine supports protected/forbidden/generated paths, governance changes, dep
 
 Checks are diff-aware and understand working-tree, staged, single-commit, and base-ref comparisons. Untracked, renamed, deleted, and binary files are normalized as events. Existing repository debt is not reported unless the current diff touches it.
 
-Natural-language scanning classifies instructions as deterministic, structural, semantic, advisory, or ambiguous. Only explicit YAML rules enforce outcomes. Heuristic and semantic interpretation is deliberately not a blocking dependency in v0.1.
+Natural-language scanning classifies instructions as deterministic, structural, semantic, advisory, or ambiguous. Deterministic and structural rules enforce outcomes; heuristic and semantic interpretation remains non-blocking.
 
 ## Evidence and approvals
 
@@ -291,6 +302,8 @@ Cursor project hook in `.cursor/hooks.json`:
 ```
 
 Claude and Cursor have native pre-shell responses. Generic Git/CI provides authoritative diff verification. Codex and Copilot capability metadata and event normalization are present, but native lifecycle installation is not claimed in v0.1.
+
+Run `hallpass install claude`, `hallpass install cursor`, or `hallpass install all` to wire these hooks automatically instead of editing the files by hand.
 
 ## CI
 

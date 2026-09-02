@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "hallpass",
+  "description": "Runtime policy enforcement for AI coding agents. The best code is the code that passed the check.",
+  "owner": { "name": "Amrish Khan", "url": "https://github.com/amrishkhan05" },
+  "plugins": [
+    {
+      "name": "hallpass",
+      "description": "Blocks policy-violating diffs and shell commands before they land.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
