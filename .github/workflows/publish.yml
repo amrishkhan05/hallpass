@@ -37,6 +37,7 @@ jobs:
           npm run validate:package
 
       - name: Verify release tag matches package.json version
+        if: github.event_name == 'release'
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
           VERSION=$(node -p "require('./package.json').version")
